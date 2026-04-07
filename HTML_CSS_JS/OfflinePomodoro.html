@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<!--
+  Declares the document as HTML5.
+  This tells the browser how to interpret the markup.
+-->
+<html lang="en">
+<head>
+  <!--
+    Defines character encoding so text is displayed correctly
+    UTF‑8 supports almost all characters and symbols.
+  -->
+  <meta charset="UTF-8" />
+
+  <!--
+    Makes the page responsive on mobile devices
+    Ensures proper scaling depending on screen size
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+  <title>Pomodoro Timer</title>
+
+  <style>
+    /*
+      CSS VARIABLES (Custom Properties)
+      Defined in :root so they are globally available
+    */
+    :root {
+      --bg-color: #f4f4f4;
+      --text-color: #333;
+      --accent-color: #e74c3c;
+      --button-color: #2ecc71;
+    }
+
+    /*
+      Overrides CSS variables when dark mode is enabled
+      Toggling this class switches the entire theme instantly
+    */
+    body.dark-mode {
+      --bg-color: #1e1e1e;
+      --text-color: #f4f4f4;
+      --accent-color: #ff7675;
+      --button-color: #00b894;
+    }
+
+    /*
+      Global body styling
+      Uses CSS variables for theme consistency
+    */
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+
+      /* Flexbox layout to center content vertically */
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+
+      margin: 0;
+
+      /* Smooth transition when switching themes */
+      transition: background 0.3s, color 0.3s;
+    }
+
+    /*
+      Main wrapper for all content
+      Limits width for better readability
+    */
+    .container {
+      text-align: center;
+      padding: 20px;
+      max-width: 400px;
+      width: 100%;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    label, select {
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    /*
+      Displays current session type:
+      Work Session / Short Break / Long Break
+    */
+    #session-type {
+      font-size: 18px;
+      margin-bottom: 20px;
+    }
+
+    /*
+      Progress ring wrapper
+      Used for the circular countdown visualization
+    */
+    .progress-ring {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      margin: 0 auto;
+    }
+
+    /*
+      SVG overlays the circle exactly on the container
+    */
+    .progress-ring svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    /*
+      Base styling for both circles
+      Rotated -90deg so progress starts at the top
+    */
+    .progress-ring circle {
+      fill: none;
+      stroke-width: 10;
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+    }
+
+    /* Static background circle */
+    .progress-ring__background {
+      stroke: #ddd;
+    }
+
+    /*
+      Animated progress circle
+      Stroke offset is updated via JavaScript
+    */
+    .progress-ring__progress {
+      stroke: var(--accent-color);
+      stroke-linecap: round;
+      transition: stroke-dashoffset 1s linear;
+    }
+
+    /*
+      Digital timer text displayed in the center
+    */
+    #time {
+      font-size: 36px;
+      color: var(--accent-color);
+      position: relative;
+      top: 80px;
+    }
+
+    /*
+      Button container
+      Uses flexbox for layout and wrapping
+    */
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 40px;
+    }
+
+    /*
+      General button styling
+    */
+    button {
+      padding: 10px 16px;
+      font-size: 14px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background-color: var(--button-color);
+      color: white;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    /* Special styling for long break button */
+    #long-break {
+      background-color: #9b59b6;
+    }
+
+    /* Dark mode toggle button */
+    #dark-toggle {
+      background-color: #555;
+    }
+  </style>
+</head>
+
+<!--
+  dark-mode class is added by default
+  You can remove it if light mode should be default
+-->
+<body class="dark-mode">
+  <div class="container">
+    <h1>Pomodoro Timer</h1>
+
+    <!-- Dropdown to select work duration -->
+    <label for="work-duration">Work Duration:</label>
+    <select id="work-duration">
+      <option value="5">5 minutes</option>
+      <option value="10">10 minutes</option>
+      <option value="25" selected>25 minutes</option>
+      <option value="60">60 minutes</option>
+    </select>
+
+    <!-- Displays current session -->
+    <div id="session-type">Work Session</div>
+
+    <!-- Circular progress indicator -->
+    <div class="progress-ring">
+      <svg width="200" height="200">
+        <!-- Background circle -->
+        <circle class="progress-ring__background" r="90" cx="100" cy="100" />
+
+        <!-- Progress circle updated by JavaScript -->
+        <circle class="progress-ring__progress" r="90" cx="100" cy="100" />
+      </svg>
+
+      <!-- Digital timer text -->
+      <div id="time">25:00</div>
+    </div>
+
+    <!-- Control buttons -->
+    <div class="buttons">
+      <button id="start">Start</button>
+      <button id="pause">Pause</button>
+      <button id="reset">Reset</button>
+      <button id="long-break">Take Long Break</button>
+      <button id="dark-toggle">Toggle Dark Mode</button>
+    </div>
+  </div>
+
+  <script>
+    // Reference to timer interval
+    let timer;
+
+    // Track if countdown is running
+    let isRunning = false;
+
+    // Counts completed work sessions
+    let sessionCount = 0;
+
+    // Tracks current session type
+    let currentSession = 'work';
+
+    // Remaining time in seconds
+    let timeLeft = 25 * 60;
+
+    // Used to calculate progress percentage
+    let totalTime = timeLeft;
+
+    // DOM element references
+    const timeDisplay = document.getElementById('time');
+    const sessionTypeDisplay = document.getElementById('session-type');
+    const startBtn = document.getElementById('start');
+    const pauseBtn = document.getElementById('pause');
+    const resetBtn = document.getElementById('reset');
+    const longBreakBtn = document.getElementById('long-break');
+    const darkToggleBtn = document.getElementById('dark-toggle');
+    const durationSelect = document.getElementById('work-duration');
+
+    // Circular progress SVG logic
+    const progressCircle = document.querySelector('.progress-ring__progress');
+
+    // Radius of circle
+    const radius = progressCircle.r.baseVal.value;
+
+    // Circumference used for stroke calculations
+    const circumference = 2 * Math.PI * radius;
+
+    // Makes the stroke behave like a progress bar
+    progressCircle.style.strokeDasharray = `${circumference}`;
+    progressCircle.style.strokeDashoffset = `${circumference}`;
+
+    // Updates circular progress based on remaining time
+    function updateProgress() {
+      const percent = timeLeft / totalTime;
+      const offset = circumference * (1 - percent);
+      progressCircle.style.strokeDashoffset = offset;
+    }
+
+    // Updates timer text and progress ring
+    function updateDisplay() {
+      const minutes = Math.floor(timeLeft / 60);
+      const seconds = timeLeft % 60;
+
+      timeDisplay.textContent =
+        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+      updateProgress();
+    }
+
+    // Change work duration only when timer is not running
+    durationSelect.addEventListener('change', () => {
+      if (currentSession === 'work' && !isRunning) {
+        timeLeft = parseInt(durationSelect.value) * 60;
+        totalTime = timeLeft;
+        updateDisplay();
+      }
+    });
+
+    // Starts the timer countdown
+    function startTimer() {
+      if (!isRunning) {
+        isRunning = true;
+        timer = setInterval(() => {
+          if (timeLeft > 0) {
+            timeLeft--;
+            updateDisplay();
+          } else {
+            clearInterval(timer);
+            isRunning = false;
+            alert("⏰ Time's up! Take a break.");
+            handleSessionEnd();
+          }
+        }, 1000);
+      }
+    }
+
+    // Pauses the countdown
+    function pauseTimer() {
+      clearInterval(timer);
+      isRunning = false;
+    }
+
+    // Resets timer to work session
+    function resetTimer() {
+      clearInterval(timer);
+      isRunning = false;
+      setSession('work');
+    }
+
+    // Switches between work, short break, and long break
+    function setSession(type) {
+      currentSession = type;
+
+      if (type === 'work') {
+        timeLeft = parseInt(durationSelect.value) * 60;
+        sessionTypeDisplay.textContent = 'Work Session';
+      } else if (type === 'short') {
+        timeLeft = 5 * 60;
+        sessionTypeDisplay.textContent = 'Short Break';
+      } else if (type === 'long') {
+        timeLeft = 15 * 60;
+        sessionTypeDisplay.textContent = 'Long Break';
+      }
+
+      totalTime = timeLeft;
+      updateDisplay();
+    }
+
+    // Automatically decides next session after timer ends
+    function handleSessionEnd() {
+      if (currentSession === 'work') {
+        sessionCount++;
+        sessionCount % 4 === 0 ? setSession('long') : setSession('short');
+      } else {
+        setSession('work');
+      }
+    }
+
+    // Manually trigger long break
+    function triggerLongBreakManually() {
+      clearInterval(timer);
+      isRunning = false;
+      setSession('long');
+      startTimer();
+    }
+
+    // Toggles dark/light theme
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+    }
+
+    // Attach event listeners
+    startBtn.addEventListener('click', startTimer);
+    pauseBtn.addEventListener('click', pauseTimer);
+    resetBtn.addEventListener('click', resetTimer);
+    longBreakBtn.addEventListener('click', triggerLongBreakManually);
+    darkToggleBtn.addEventListener('click', toggleDarkMode);
+
+    // Initial UI update on page load
+    updateDisplay();
+  </script>
+</body>
+</html>
