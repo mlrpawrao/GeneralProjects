@@ -21,15 +21,6 @@ Each project may have its own structure, dependencies, and documentation.
 REPOSITORY STRUCTURE
 --------------------
 
-GeneralProjects/
-├── project-1/
-│   ├── README.md
-│   └── source-code/
-├── project-2/
-│   ├── README.md
-│   └── scripts/
-└── README.txt
-
 Each sub-directory represents an independent project and may include its own
 README with project-specific details.
 
